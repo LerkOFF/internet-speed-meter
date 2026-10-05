@@ -3,7 +3,7 @@
 и печатает среднее время запроса, объём скачанного и скорость в МБ/с.
 
 Пример:
-    python3 speed_meter.py https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Pizigani_1367_Chart_10MB.jpg/3840px-Pizigani_1367_Chart_10MB.jpg
+    python3 speed_meter.py https://images-assets.nasa.gov/image/as11-40-5903/as11-40-5903~orig.jpg
 """
 
 import argparse
