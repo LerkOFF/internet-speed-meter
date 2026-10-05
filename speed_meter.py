@@ -8,14 +8,26 @@ import urllib.request
 
 REQUESTS = 10
 MB = 1_000_000  # десятичный мегабайт, как в тарифах провайдеров
+CHUNK_SIZE = 64 * 1024
+USER_AGENT = "internet-speed-meter/1.0 (Python urllib)"
 
 
 def download(url):
     """Скачивает url целиком. Возвращает (байт в теле ответа, секунд на весь запрос)."""
+    request = urllib.request.Request(url, headers={
+        "User-Agent": USER_AGENT,
+        "Accept-Encoding": "identity",  # без сжатия: считаем байты самого файла
+        "Cache-Control": "no-cache",    # просим промежуточные кэши не отдавать сохранённую копию
+    })
+    received = 0
     started = time.perf_counter()
-    with urllib.request.urlopen(url) as response:
-        size = len(response.read())
-    return size, time.perf_counter() - started
+    with urllib.request.urlopen(request) as response:
+        while True:
+            chunk = response.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            received += len(chunk)
+    return received, time.perf_counter() - started
 
 
 def main():
