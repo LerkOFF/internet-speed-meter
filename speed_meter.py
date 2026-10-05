@@ -7,8 +7,11 @@
 """
 
 import argparse
+import http.client
+import socket
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -63,12 +66,27 @@ def download(url, timeout):
     received = 0
     started = time.perf_counter()
     with urllib.request.urlopen(request, timeout=timeout) as response:
+        expected = response.headers.get("Content-Length", "")
         while True:
             chunk = response.read(CHUNK_SIZE)
             if not chunk:
                 break
             received += len(chunk)
-    return received, time.perf_counter() - started
+    elapsed = time.perf_counter() - started
+    # http.client на оборванном ответе молча отдаёт b"", поэтому сверяем длину сами
+    if expected.isdigit() and received != int(expected):
+        raise ConnectionError(f"ответ оборван: получено {received} из {expected} байт")
+    return received, elapsed
+
+
+def describe(error):
+    """Короткое описание упавшего запроса для консоли."""
+    if isinstance(error, urllib.error.HTTPError):
+        return f"HTTP {error.code} {error.reason}"
+    reason = getattr(error, "reason", error)  # URLError прячет настоящую причину в .reason
+    if isinstance(reason, socket.timeout):
+        return "сервер не ответил за отведённое время"
+    return str(reason) or type(reason).__name__
 
 
 def main(argv=None):
@@ -76,18 +94,29 @@ def main(argv=None):
     print(f"Адрес: {args.url}")
     print(f"Запросов: {args.count}, по очереди\n")
 
-    total_bytes = 0
-    total_seconds = 0.0
+    results = []  # (байт, секунд) по каждому успешному запросу
     width = len(str(args.count))
     for number in range(1, args.count + 1):
-        size, seconds = download(args.url, args.timeout)
-        total_bytes += size
-        total_seconds += seconds
-        print(f"[{number:>{width}}/{args.count}] {size / MB:8.2f} МБ за {seconds:6.2f} с, {size / MB / seconds:7.2f} МБ/с")
+        prefix = f"[{number:>{width}}/{args.count}]"
+        try:
+            size, seconds = download(args.url, args.timeout)
+        except (OSError, http.client.HTTPException) as error:
+            print(f"{prefix} ошибка: {describe(error)}")
+            continue
+        results.append((size, seconds))
+        print(f"{prefix} {size / MB:8.2f} МБ за {seconds:6.2f} с, {size / MB / seconds:7.2f} МБ/с")
 
+    if not results:
+        sys.stdout.flush()  # иначе при выводе в файл stderr обгоняет буферизованный stdout
+        print("Ни один запрос не удался, скорость считать не из чего.", file=sys.stderr)
+        return 1
+
+    total_bytes = sum(size for size, _ in results)
+    total_seconds = sum(seconds for _, seconds in results)
     speed = total_bytes / MB / total_seconds
     print()
-    print(f"Среднее время запроса: {total_seconds / args.count:.3f} с")
+    print(f"Успешных запросов:     {len(results)} из {args.count}")
+    print(f"Среднее время запроса: {total_seconds / len(results):.3f} с")
     print(f"Скачано всего:         {total_bytes / MB:.2f} МБ")
     print(f"Скорость:              {speed:.2f} МБ/с")
     return 0
