@@ -96,15 +96,18 @@ def main(argv=None):
 
     results = []  # (байт, секунд) по каждому успешному запросу
     width = len(str(args.count))
-    for number in range(1, args.count + 1):
-        prefix = f"[{number:>{width}}/{args.count}]"
-        try:
-            size, seconds = download(args.url, args.timeout)
-        except (OSError, http.client.HTTPException) as error:
-            print(f"{prefix} ошибка: {describe(error)}")
-            continue
-        results.append((size, seconds))
-        print(f"{prefix} {size / MB:8.2f} МБ за {seconds:6.2f} с, {size / MB / seconds:7.2f} МБ/с")
+    try:
+        for number in range(1, args.count + 1):
+            prefix = f"[{number:>{width}}/{args.count}]"
+            try:
+                size, seconds = download(args.url, args.timeout)
+            except (OSError, http.client.HTTPException) as error:
+                print(f"{prefix} ошибка: {describe(error)}")
+                continue
+            results.append((size, seconds))
+            print(f"{prefix} {size / MB:8.2f} МБ за {seconds:6.2f} с, {size / MB / seconds:7.2f} МБ/с")
+    except KeyboardInterrupt:
+        print("\nПрервано, считаю по завершённым запросам.")
 
     if not results:
         sys.stdout.flush()  # иначе при выводе в файл stderr обгоняет буферизованный stdout
@@ -114,11 +117,12 @@ def main(argv=None):
     total_bytes = sum(size for size, _ in results)
     total_seconds = sum(seconds for _, seconds in results)
     speed = total_bytes / MB / total_seconds
+    exact = f"{total_bytes:,}".replace(",", " ")
     print()
     print(f"Успешных запросов:     {len(results)} из {args.count}")
     print(f"Среднее время запроса: {total_seconds / len(results):.3f} с")
-    print(f"Скачано всего:         {total_bytes / MB:.2f} МБ")
-    print(f"Скорость:              {speed:.2f} МБ/с")
+    print(f"Скачано всего:         {total_bytes / MB:.2f} МБ ({exact} байт)")
+    print(f"Скорость:              {speed:.2f} МБ/с ({speed * 8:.2f} Мбит/с)")
     return 0
 
 
